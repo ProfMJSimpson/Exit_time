@@ -1,5 +1,7 @@
 # Exit_time
-MATLAB codes to support Simpson et al. (2021)  Exit time for diffusion on irregular domains
+MATLAB codes to support two projects.
+
+The first project is Simpson et al. (2021)  Exit time for diffusion on irregular domains
 
 These MATLAB codes require GMSH 4.7.1 to generate unstructured meshes for the finite volume and random walk calculations.  The software can be downloaded at https://gmsh.info/
 
@@ -27,3 +29,4 @@ The MATLAB codes also include ellipse fitting tools from Szpak et al. (2015) htt
 - In *perturbed_ellipse_walk_2.m*, the inpoly2 function from Engwirda (2020) [https://github.com/dengwirda/inpoly] with a slight modification to prevent errors in the case of a single remaining walk. This modification is given in the documentation of *perturbed_ellipse_walk_2.m*.
 
 
+The second project is Carr et al. (2021)  Mean exit time in annular heterogeneous media.
