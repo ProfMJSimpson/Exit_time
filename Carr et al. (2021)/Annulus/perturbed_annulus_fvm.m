@@ -1,4 +1,4 @@
-function T = perturbed_annulus_fvm(D, nodes, elements, outer_boundary_nodes, inner_boundary_nodes, inner_type)
+function T = perturbed_annulus_fvm(D, nodes, elements, outer_boundary_nodes, inner_boundary_nodes, bc_type)
 %AnnulusFVMProblem: Solves the PDE del^2 T = -1/D on an annulus.
 %INPUTS: D: The diffusivity.
 %        nodes: The nodes to solve at.
@@ -7,8 +7,9 @@ function T = perturbed_annulus_fvm(D, nodes, elements, outer_boundary_nodes, inn
 %        boundary of the annulus.
 %        inner_boundary_nodes: The nodes in nodes which define the inner
 %        boundary of the annulus.
-%        inner_type: 'reflect' if the inner boundary is reflective,
-%        otherwise 'absorb'.
+%        bc_type: 'absorb-absorb' if inner and outer boundaries are absorbing
+%                 'reflect-absorb' if inner boundary is reflecting, outer boundary is absorbing
+%                 'absorb-reflect' if inner boundary is absorbing, outer boundary is reflecting.
 %OUTPUTS: T: The solution to the PDE at each node.
 
 no_elements = size(elements, 1); % number of elements
@@ -16,15 +17,15 @@ no_nodes = size(nodes, 1); % number of nodes
 
 % Find nodes on boundary
 variable = zeros(no_nodes, 1);
-if strcmpi(inner_type, 'absorb')
+if strcmpi(bc_type, 'absorb-absorb')
     for i = 1:no_nodes
-        if ismember(i, outer_boundary_nodes) | ismember(i, inner_boundary_nodes)
+        if ismember(i, outer_boundary_nodes) || ismember(i, inner_boundary_nodes)
             variable(i) = 0;
         else
             variable(i) = 1;
         end
     end
-elseif strcmpi(inner_type, 'reflect')
+elseif strcmpi(bc_type, 'reflect-absorb')
     for i = 1:no_nodes
         if ismember(i, outer_boundary_nodes)
             variable(i) = 0;
@@ -32,6 +33,15 @@ elseif strcmpi(inner_type, 'reflect')
             variable(i) = 1;
         end
     end
+% Added after revision (absorbing inner, reflecting outer)     
+elseif strcmpi(bc_type, 'absorb-reflect')
+    for i = 1:no_nodes
+        if ismember(i, inner_boundary_nodes)
+            variable(i) = 0;
+        else
+            variable(i) = 1;
+        end
+    end    
 end
 
 % Initialise
@@ -156,18 +166,14 @@ for k = 1:no_elements
 end
 
 % Discrete equations for boundary
-
-% if strcmpi(inner_type, 'absorb')
-    for i = 1:no_nodes
-        if variable(i) == 0 %
-            A(i, i) = 1;
-            A(i, [1:i-1 i+1:no_nodes]) = 0;
-            b(i) = 0;
-        end
+for i = 1:no_nodes
+    if variable(i) == 0 %
+        A(i, i) = 1;
+        A(i, [1:i-1 i+1:no_nodes]) = 0;
+        b(i) = 0;
     end
-% elseif strcmpi(inner_type, 'reflect')
-%     
-% end
+end
+
 
 % Solve linear system
 T = A \ b; 

@@ -8,10 +8,12 @@ if ~isfile(gmsh_path)
     warning('Download GMSH 4.7.1 from https://gmsh.info/bin/ and provide path to executable "gmsh".');
 end
 
-% Case = 'U1'; perturbed = false; perturb_degree = 0; % Figure 2
-% Case = 'U2'; perturbed = false; perturb_degree = 0; % Figure 3
-% Case = 'P1'; perturbed = true; perturb_degree = 2; % Figure 4
-Case = 'P2'; perturbed = true; perturb_degree = 2; % Figure 5
+% Case = 'U1'; perturbed = false; perturb_degree = 0;
+% Case = 'U2'; perturbed = false; perturb_degree = 0; 
+% Case = 'U3'; perturbed = false; perturb_degree = 0; 
+Case = 'P1'; perturbed = true; perturb_degree = 2; % Produces Figure 2
+% Case = 'P2'; perturbed = true; perturb_degree = 2; % Produces Figure 3
+% Case = 'P3'; perturbed = true; perturb_degree = 2; % Produces Figure 4
 
 % Symbolic variables
 syms g1(theta) g2(theta) r
@@ -23,21 +25,29 @@ epsilon = 0.05; % perturbation parameter
 g1(theta) = sin(3*theta) + cos(5*theta); % perturbation function on inner radius
 g2(theta) = cos(3*theta); % perturbation function on outer radius
 if strcmp(Case,'U1')
-    inner_type = 'absorb'; % inner boundary condition
+    bc_type = 'absorb-absorb'; % inner absorbing, outer absorbing
     g1(theta) = 0; % perturbation function on inner radius
     g2(theta) = 0; % perturbation function on outer radius
 elseif strcmp(Case,'U2')
-    inner_type = 'reflect'; % inner boundary condition
+    bc_type = 'reflect-absorb'; % inner reflecting, outer absorbing
+    g1(theta) = 0; % perturbation function on inner radius
+    g2(theta) = 0; % perturbation function on outer radius
+elseif strcmp(Case,'U3')
+    bc_type = 'absorb-reflect'; % inner absorbing, outer reflecting
     g1(theta) = 0; % perturbation function on inner radius
     g2(theta) = 0; % perturbation function on outer radius
 elseif strcmp(Case,'P1')
-    inner_type = 'absorb'; % inner boundary condition
+    bc_type = 'absorb-absorb'; % inner absorbing, outer absorbing
     g1(theta) = sin(3*theta) + cos(5*theta); % perturbation function on inner radius
     g2(theta) = cos(3*theta); % perturbation function on outer radius
 elseif strcmp(Case,'P2')
-    inner_type = 'reflect'; % inner boundary condition
+    bc_type = 'reflect-absorb'; % inner reflecting, outer absorbing
     g1(theta) = sin(3*theta) + cos(5*theta); % perturbation function on inner radius
     g2(theta) = cos(3*theta); % perturbation function on outer radius
+elseif strcmp(Case,'P3')
+    bc_type = 'absorb-reflect'; % inner absorbing, outer reflecting
+    g1(theta) = sin(3*theta) + cos(5*theta); % perturbation function on inner radius
+    g2(theta) = cos(3*theta); % perturbation function on outer radius    
 end
 
 % Random Walk Parameters
@@ -86,24 +96,26 @@ drawnow
 
 %% Random Walk
 ExitTime_Walk = perturbed_annulus_walk(nodes(:, 1), nodes(:, 2), ...
-    delta, tau, P, num_sims, R_inner, R_outer, inner_type);
+    delta, tau, P, num_sims, R_inner, R_outer, bc_type);
 disp('Random Walk complete')
 
 %% FVM Solution
 ExitTime_FVM = perturbed_annulus_fvm(D, nodes, elements, ...
-    outer_boundary_nodes, inner_boundary_nodes, inner_type);
+    outer_boundary_nodes, inner_boundary_nodes, bc_type);
 disp('FVM complete')
 
 %% Perturbation Solution
 if perturbed
     a = R1; b = R2;
     Perturbation = perturbed_annulus_perturbation(R1, R2, g1, g2, ...
-        D, perturb_degree, fourier_terms, epsilon, inner_type, a, b, D);
+        D, perturb_degree, fourier_terms, epsilon, bc_type, a, b, D);
     ExitTime_Perturbation = zeros(1, length(nodes(:, 1)));
     if strcmp(Case,'P1')
         absorbing_nodes = boundary_nodes;
     elseif strcmp(Case,'P2')
         absorbing_nodes = outer_boundary_nodes;
+    elseif strcmp(Case,'P3')
+        absorbing_nodes = inner_boundary_nodes;        
     end
     for i = 1:length(nodes(:, 1))
         if ~ismember(i, absorbing_nodes)
@@ -113,15 +125,18 @@ if perturbed
     end
 else
     [ttheta, rr] = cart2pol(nodes(:, 1),nodes(:, 2));
-    if strcmpi(inner_type, 'reflect')
+    if strcmpi(bc_type, 'reflect-absorb')
         ExitTime_Perturbation = (R2^2 - rr.^2 + 2*R1^2 * log(rr/R2))/(4*D);
-    elseif strcmpi(inner_type, 'absorb')
+    elseif strcmpi(bc_type, 'absorb-absorb')
         ExitTime_Perturbation = 1/(4*D*log(R1/R2)) * (R1^2*log(rr/R2) + ...
             R2^2*log(R1./rr) + rr.^2*log(R2/R1));
+    elseif strcmpi(bc_type, 'absorb-reflect')
+        ExitTime_Perturbation = (R1^2 - rr.^2 + 2*R2^2 * log(rr/R1))/(4*D);    
     end
 end
 disp('Perturbation complete')
 fprintf('%g nodes and %g triangular elements\n',length(nodes(:,1)),length(elements(:,1)))
+ExitTime_Perturbation = ExitTime_Perturbation';
 
 %% Plots
 bottom = 0;
@@ -129,38 +144,50 @@ top = max([ExitTime_FVM]);
 top = round(top, -2);
 
 figure;
-set(gcf, 'Units', 'Normalized', 'OuterPosition', [0, 0, 1, 1]);
-t=subplot(1, 3, 1);
+set(gcf, 'Units', 'Normalized', 'OuterPosition', [0, 0, 0.8, 1]);
+t=subplot(2, 2, 1);
 trisurf(elements, nodes(:, 1), nodes(:, 2), ExitTime_Walk);
 axis image
-axis_specs(bottom, top);
+axis_specs(bottom, top, true, '$T$');
 campos([0, 0, max(ExitTime_Walk)]);
-axis([min([nodes(:,1);-R2]),max([nodes(:,1),;R2]),min([nodes(:,2);-R2]),max([nodes(:,2);R2])])
-set(t.Colorbar, 'Visible', 'off');
+axis([min([nodes(:,1);-R2]),max([nodes(:,1);R2]),min([nodes(:,2);-R2]),max([nodes(:,2);R2])]);
+%set(t.Colorbar, 'Visible', 'off');
 text(-4.73, -4.46, '(a)', 'FontSize', 28, 'Interpreter', 'latex')
-t=subplot(1, 3, 2);
+t=subplot(2, 2, 2);
 trisurf(elements, nodes(:, 1), nodes(:, 2), ExitTime_Perturbation)
 axis image
-axis_specs(bottom, top);
-set(t.Colorbar, 'Visible', 'off')
+axis_specs(bottom, top, true, '$T$');
+%set(t.Colorbar, 'Visible', 'off')
 campos([0, 0, max(ExitTime_Perturbation)]);
-axis([min([nodes(:,1);-R2]),max([nodes(:,1),;R2]),min([nodes(:,2);-R2]),max([nodes(:,2);R2])])
+axis([min([nodes(:,1);-R2]),max([nodes(:,1);R2]),min([nodes(:,2);-R2]),max([nodes(:,2);R2])]);
 text(-4.73, -4.46, '(b)', 'FontSize', 28, 'Interpreter', 'latex')
-t=subplot(1, 3, 3);
+t=subplot(2, 2, 3);
 trisurf(elements, nodes(:, 1), nodes(:, 2), ExitTime_FVM);
 axis image
-axis_specs(bottom, top);
+axis_specs(bottom, top, true, '$T$');
 campos([0, 0, max(ExitTime_FVM)]);
-axis([min([nodes(:,1);-R2]),max([nodes(:,1),;R2]),min([nodes(:,2);-R2]),max([nodes(:,2);R2])])
+axis([min([nodes(:,1);-R2]),max([nodes(:,1);R2]),min([nodes(:,2);-R2]),max([nodes(:,2);R2])]);
 text(-4.73, -4.46, '(c)', 'FontSize', 28, 'Interpreter', 'latex')
+t=subplot(2, 2, 4);
+E = 100*abs(ExitTime_FVM-ExitTime_Perturbation)/max(ExitTime_FVM);
+trisurf(elements, nodes(:, 1), nodes(:, 2), E);
+axis image
+bottom = 0;
+%top = round(max(E),2);
+top = 4*ceil(100*max(E)/4)/100;
+axis_specs(bottom, top, true, '$E$');
+campos([0, 0, max(ExitTime_FVM)]);
+axis([min([nodes(:,1);-R2]),max([nodes(:,1);R2]),min([nodes(:,2);-R2]),max([nodes(:,2);R2])]);
+colormap(t,summer)
+text(-4.73, -4.46, '(d)', 'FontSize', 28, 'Interpreter', 'latex')
 
 % Sub-function (plot specifications)
-function axis_specs(bottom,top,bar)
-arguments
-    bottom = 0
-    top = 100
-    bar = true
-end
+function axis_specs(bottom,top,bar,cbar_title)
+% arguments
+%     bottom = 0
+%     top = 100
+%     bar = true
+% end
 shading interp
 lighting phong
 camtarget([0 0 0])
@@ -169,11 +196,11 @@ caxis([bottom top]);
 set(gca,'XTick',-3:3:3,'YTick',-3:3:3)
 if bar
     cb = colorbar;
-    title(cb, '$T$', 'Interpreter', 'latex')
+    title(cb, cbar_title, 'Interpreter', 'latex')
     cb.Label.Interpreter='latex';
     cb.TickLabelInterpreter='latex';
     yticks = linspace(bottom,top,5);
-    cb.YTick = yticks;
+    cb.YTick = round(yticks,2);
     cb.Limits = [cb.YTick(1),cb.YTick(end)];
 end
 box on
