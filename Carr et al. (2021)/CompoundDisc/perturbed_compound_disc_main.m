@@ -8,10 +8,10 @@ if ~isfile(gmsh_path)
     warning('Download GMSH 4.7.1 from https://gmsh.info/bin/ and provide path to executable "gmsh".');
 end
 
-% Case = 'U1'; perturbed = false; perturb_degree = 0; % Figure 6
-% Case = 'U2'; perturbed = false; perturb_degree = 0; % Figure 7
-% Case = 'P1'; perturbed = true; perturb_degree = 2; % Figure 8
-Case = 'P2'; perturbed = true; perturb_degree = 2; % Figure 9
+% Case = 'U1'; perturbed = false; perturb_degree = 0; 
+% Case = 'U2'; perturbed = false; perturb_degree = 0; 
+Case = 'P1'; perturbed = true; perturb_degree = 2; % Produces Figure 5
+% Case = 'P2'; perturbed = true; perturb_degree = 2; % Produces Figure 6
 
 % Geometry parameters
 R1 = 2; % unperturbed inner radius 
@@ -107,45 +107,59 @@ fprintf('%g nodes and %g triangular elements\n',length(nodes(:,1)),length(elemen
 %% Plots
 ExitTime_Walk = walks;
 ExitTime_FVM = fvmsol;
-ExitTime_Exact = pertsols(:,perturb_degree+1);
+ExitTime_Perturbation = pertsols(:,perturb_degree+1);
 bottom = 0;
-top = max([ExitTime_FVM; ExitTime_Exact]);
+top = max([ExitTime_FVM; ExitTime_Perturbation]);
 top = round(top, -2);
 figure
-set(gcf, 'Units', 'Normalized', 'OuterPosition', [0, 0, 1, 1]);
-t=subplot(1, 3, 1);
+set(gcf, 'Units', 'Normalized', 'OuterPosition', [0, 0, 0.8, 1]);
+t=subplot(2, 2, 1);
 trisurf(elements, nodes(:, 1), nodes(:, 2), ExitTime_Walk);
 hold on
 plot3(xint1,yint1,0.99999*max(ExitTime_Walk)*ones(size(xint1)),'k','LineWidth',2)
 axis image
-axis_specs(bottom, top);
+axis_specs(bottom, top, true, '$T^{(1)},T^{(2)}$');
 axis([-R2 R2 -R2 R2])
-set(t.Colorbar, 'Visible', 'off');
-campos([0, 0, max(ExitTime_Walk)]);
+% campos([0, 0, max(ExitTime_Walk)]);
+view(2)
 text(-4.73, -4.46, '(a)', 'FontSize', 28, 'Interpreter', 'latex')
-t=subplot(1, 3, 2);
-trisurf(elements, nodes(:, 1), nodes(:, 2), ExitTime_Exact)
+t=subplot(2, 2, 2);
+trisurf(elements, nodes(:, 1), nodes(:, 2), ExitTime_Perturbation)
 axis image
-axis_specs(bottom, top);
+axis_specs(bottom, top, true, '$T^{(1)},T^{(2)}$');
 axis([-R2 R2 -R2 R2])
-set(t.Colorbar, 'Visible', 'off')
-campos([0, 0, max(ExitTime_Exact)]);
+% campos([0, 0, max(ExitTime_Perturbation)]);
+view(2)
 text(-4.73, -4.46, '(b)', 'FontSize', 28, 'Interpreter', 'latex')
-t=subplot(1, 3, 3);
+t=subplot(2, 2, 3);
 trisurf(elements, nodes(:, 1), nodes(:, 2), ExitTime_FVM);
 axis image
-axis_specs(bottom, top);
+axis_specs(bottom, top, true, '$T^{(1)},T^{(2)}$');
 axis([-R2 R2 -R2 R2])
-campos([0, 0, max(ExitTime_FVM)]);
+%campos([0, 0, max(ExitTime_FVM)]);
+view(2)
 text(-4.73, -4.46, '(c)', 'FontSize', 28, 'Interpreter', 'latex')
+t=subplot(2, 2, 4);
+E = 100*abs(ExitTime_FVM-ExitTime_Perturbation)/max(ExitTime_FVM);
+trisurf(elements, nodes(:, 1), nodes(:, 2), E);
+axis image
+bottom = 0;
+%top = round(max(E),1);
+top = 4*ceil(100*max(E)/4)/100; % round up to nearest multiple of 4 to get equally spaced yticks
+axis_specs(bottom, top, true, '$E$');
+%campos([0, 0, top]);
+view(2)
+axis([min([nodes(:,1);-R2]),max([nodes(:,1);R2]),min([nodes(:,2);-R2]),max([nodes(:,2);R2])]);
+colormap(t,summer)
+text(-4.73, -4.46, '(d)', 'FontSize', 28, 'Interpreter', 'latex')
 
 % Sub-function (plot specifications)
-function axis_specs(bottom,top,bar)
-arguments
-    bottom = 0
-    top = 100
-    bar = true
-end
+function axis_specs(bottom,top,bar,cbar_title)
+% arguments
+%     bottom = 0
+%     top = 100
+%     bar = true
+% end
 shading interp
 lighting phong
 camtarget([0 0 0])
@@ -154,15 +168,14 @@ caxis([bottom top]);
 set(gca,'XTick',-3:3:3,'YTick',-3:3:3)
 if bar
     cb = colorbar;
-    title(cb, '$T^{(1)}$, $T^{(2)}$', 'Interpreter', 'latex')
+    title(cb, cbar_title, 'Interpreter', 'latex')
     cb.Label.Interpreter='latex';
     cb.TickLabelInterpreter='latex';
     yticks = linspace(bottom,top,5);
-    cb.YTickLabel = cellstr(num2str(reshape(yticks,[],1),'%g'));
-%     for k = 1:5
-%         yticks(k) = round(yticks(k),max(floor(log10(yticks(k)))-1,2),'significant');
-%     end
-    cb.YTick = yticks;
+    cb.YTick = round(yticks,2);
+    if ~strcmpi(cbar_title,'$E$')
+        cb.YTickLabel = cellstr(num2str(reshape(yticks,[],1),'%g'));
+    end
     cb.Limits = [cb.YTick(1),cb.YTick(end)];
 end
 box on
